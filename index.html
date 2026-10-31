@@ -1,0 +1,180 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>khushu's bday bash!!</title>
+
+  <!-- three.js r128 + matching GLTFLoader and OrbitControls (versions must match) -->
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/build/three.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/loaders/GLTFLoader.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/three@0.128.0/examples/js/controls/OrbitControls.js"></script>
+</head>
+<body style="margin: 0; padding: 0; background-color: #FDFBF7; font-family: sans-serif;">
+
+  <div id="container" style="
+      background-color: #FFF9E6;
+      max-width: 400px;
+      margin: 60px auto;
+      padding: 20px;
+      border-radius: 10px;
+      border: 2px burlywood solid;
+      text-align: center;
+  ">
+    <h1 style="color: burlywood; font-family: Arial, sans-serif; font-size: 2.0rem; margin-top: 10px;">
+      happy bday kikipiki!!
+    </h1>
+
+    <p style="color: #8B7355; font-size: 1.0rem; line-height: 1.6; margin-bottom: 20px;">
+      it's khushu's birthday! and i bet she is hungry :O well fear not! khushu's laphing wife has something ready for her
+    </p>
+
+    <div id="canvas-container" style="
+        width: 100%;
+        height: 300px;
+        background-color: #FFF5EE;
+        border-radius: 8px;
+        margin: 20px 0;
+        overflow: hidden;
+        touch-action: none;
+    "></div>
+
+    <p id="hint" style="color: #8B7355; font-size: 0.85rem; margin: 0;">
+      drag to rotate the laphing | tap/click the plate for a surprise !!!!
+    </p>
+  </div>
+
+  <!-- SURPRISE LETTER -->
+  <div id="letter-modal" style="
+      display: none;
+      position: fixed;
+      top: 50%;
+      left: 50%;
+      transform: translate(-50%, -50%);
+      background-color: white;
+      padding: 25px;
+      border-radius: 16px;
+      text-align: center;
+      max-width: 320px;
+      width: 80%;
+      border: 3px dashed burlywood;
+      z-index: 1000;
+      box-shadow: 0 10px 40px rgba(0,0,0,0.25);
+  ">
+    <h2 style="color: burlywood; font-family: Arial, sans-serif; margin-top: 0;">virtual bday letter 4 u darl</h2>
+
+    <p style="color: #555; font-size: 1.0rem; line-height: 1.6;">
+      happiest bday my darling doll i hope you have the coolest bestest amazingest day ever and maybe go and treat yourself to a plate of lappphinngggg ;))) i love you so sosososososomuch and i cannot wait to see your pretty face VERYSOOONNN. 
+      <a href="https://www.youtube.com/watch?v=Wj4qpfWHFDo"> click for a song that reminds me of u :33</a>
+    </p>
+
+    <button onclick="document.getElementById('letter-modal').style.display='none'" style="
+        background-color: burlywood;
+        color: white;
+        border: none;
+        padding: 8px 16px;
+        border-radius: 6px;
+        cursor: pointer;
+        font-weight: bold;
+    ">Close ❌</button>
+  </div>
+
+  <script>
+    const canvasSlot = document.getElementById('canvas-container');
+    let scene, camera, renderer, controls, modelMesh;
+    const raycaster = new THREE.Raycaster();
+    const pointer = new THREE.Vector2();
+
+    function init3D() {
+      scene = new THREE.Scene();
+
+      camera = new THREE.PerspectiveCamera(45, canvasSlot.clientWidth / canvasSlot.clientHeight, 0.1, 1000);
+      camera.position.set(0, 3, 7);
+
+      scene.add(new THREE.AmbientLight(0xffffff, 1.0));
+      const sunlight = new THREE.DirectionalLight(0xffffff, 0.8);
+      sunlight.position.set(5, 10, 5);
+      scene.add(sunlight);
+
+      renderer = new THREE.WebGLRenderer({ antialias: true, alpha: true });
+      renderer.setSize(canvasSlot.clientWidth, canvasSlot.clientHeight);
+      renderer.setPixelRatio(window.devicePixelRatio);
+      renderer.outputEncoding = THREE.sRGBEncoding; // correct colours for .glb files
+      canvasSlot.appendChild(renderer.domElement);
+
+      // Drag / swipe to rotate
+      controls = new THREE.OrbitControls(camera, renderer.domElement);
+      controls.enableDamping = true;
+      controls.enablePan = false;
+      controls.enableZoom = true;     // set to false if it interferes with page scrolling
+      controls.minDistance = 4;
+      controls.maxDistance = 12;
+      controls.autoRotate = true;     // gentle spin until the user touches it
+      controls.autoRotateSpeed = 2;
+      controls.addEventListener('start', () => controls.autoRotate = false);
+
+      // Load the model (must be in the same folder as this file)
+      const loader = new THREE.GLTFLoader();
+      loader.load('laphing.glb', function (gltf) {
+        modelMesh = gltf.scene;
+
+        // Centre and scale the model
+        const box = new THREE.Box3().setFromObject(modelMesh);
+        const center = box.getCenter(new THREE.Vector3());
+        const size = box.getSize(new THREE.Vector3());
+        const maxDim = Math.max(size.x, size.y, size.z);
+        const scaleFactor = maxDim > 0 ? 3.6 / maxDim : 1;
+
+        modelMesh.position.sub(center.multiplyScalar(scaleFactor));
+        modelMesh.scale.setScalar(scaleFactor);
+
+        scene.add(modelMesh);
+      }, undefined, function (err) {
+        console.error('Could not load laphing.glb:', err);
+        canvasSlot.innerHTML = '<p style="color:#8B7355;padding:20px;">Model failed to load.<br>Check the file name and run via a local server.</p>';
+      });
+
+      setupClick();
+      window.addEventListener('resize', onResize);
+      animate();
+    }
+
+    // Distinguish a tap/click from a drag, and only react if the plate was hit
+    function setupClick() {
+      let downX = 0, downY = 0;
+      const el = renderer.domElement;
+
+      el.addEventListener('pointerdown', (e) => { downX = e.clientX; downY = e.clientY; });
+
+      el.addEventListener('pointerup', (e) => {
+        if (Math.hypot(e.clientX - downX, e.clientY - downY) > 6) return; // was a drag
+        if (!modelMesh) return;
+
+        const rect = el.getBoundingClientRect();
+        pointer.x = ((e.clientX - rect.left) / rect.width) * 2 - 1;
+        pointer.y = -((e.clientY - rect.top) / rect.height) * 2 + 1;
+        raycaster.setFromCamera(pointer, camera);
+
+        if (raycaster.intersectObject(modelMesh, true).length > 0) {
+          document.getElementById('letter-modal').style.display = 'block';
+        }
+      });
+    }
+
+    function onResize() {
+      const w = canvasSlot.clientWidth, h = canvasSlot.clientHeight;
+      camera.aspect = w / h;
+      camera.updateProjectionMatrix();
+      renderer.setSize(w, h);
+    }
+
+    function animate() {
+      requestAnimationFrame(animate);
+      controls.update();
+      renderer.render(scene, camera);
+    }
+
+    init3D();
+  </script>
+</body>
+</html>
